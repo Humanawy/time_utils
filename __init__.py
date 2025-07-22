@@ -1,5 +1,5 @@
 #__init__.py
-from time_units import (
+from gridtime import (
     QuarterHour,
     Hour,
     Day,

@@ -7,17 +7,17 @@ import locale
 
 locale.setlocale(locale.LC_TIME, "pl_PL.UTF-8") 
 
-_TIME_UNIT_REGISTRY = {}
+_GRIDTIME_REGISTRY = {}
 
 def print_structure_tree(cls: type, indent: str = ""):
-    unit_key = _TIME_UNIT_REGISTRY.get(cls, {}).get("unit_key", cls.__name__)
+    unit_key = _GRIDTIME_REGISTRY.get(cls, {}).get("unit_key", cls.__name__)
     print(f"{indent}{cls.__name__} [{unit_key}]")
 
-    child_key = _TIME_UNIT_REGISTRY.get(cls, {}).get("children_key")
+    child_key = _GRIDTIME_REGISTRY.get(cls, {}).get("children_key")
     if child_key:
         # znajdź klasy dzieci po children_key
         child_classes = [
-            child_cls for child_cls, props in _TIME_UNIT_REGISTRY.items()
+            child_cls for child_cls, props in _GRIDTIME_REGISTRY.items()
             if props["unit_key"] == child_key
         ]
         for child_cls in child_classes:
@@ -25,7 +25,7 @@ def print_structure_tree(cls: type, indent: str = ""):
 
 def register_unit(unit_key: str, children_key: Optional[str] = None):
     def decorator(cls):
-        _TIME_UNIT_REGISTRY[cls] = {
+        _GRIDTIME_REGISTRY[cls] = {
             "unit_key": unit_key,
             "children_key": children_key
         }
@@ -34,14 +34,14 @@ def register_unit(unit_key: str, children_key: Optional[str] = None):
 
 def _all_unit_keys() -> set[str]:
     """Zwraca zbiór wszystkich zarejestrowanych unit_key‑ów."""
-    return {props["unit_key"] for props in _TIME_UNIT_REGISTRY.values()}
+    return {props["unit_key"] for props in _GRIDTIME_REGISTRY.values()}
 
 def _is_reachable(cls: type, target_unit: str) -> bool:
     """
     Czy z danej klasy istnieje ścieżka do jednostki `target_unit`
     (włącznie z nią samą)?
     """
-    props = _TIME_UNIT_REGISTRY.get(cls, {})
+    props = _GRIDTIME_REGISTRY.get(cls, {})
     if props.get("unit_key") == target_unit:
         return True
 
@@ -51,13 +51,13 @@ def _is_reachable(cls: type, target_unit: str) -> bool:
 
     # wszystkie klasy, które reprezentują dziecko o podanym key‑u
     child_classes = [
-        c for c, p in _TIME_UNIT_REGISTRY.items()
+        c for c, p in _GRIDTIME_REGISTRY.items()
         if p["unit_key"] == child_key
     ]
     return any(_is_reachable(c, target_unit) for c in child_classes)
 
 def list_registered_units():
-    return {cls.__name__: props["unit_key"] for cls, props in _TIME_UNIT_REGISTRY.items()}
+    return {cls.__name__: props["unit_key"] for cls, props in _GRIDTIME_REGISTRY.items()}
 
 def is_missing_hour(start: datetime) -> bool:
     # 1. Czy miesiąc to marzec?

@@ -3,26 +3,26 @@ from datetime import datetime, timedelta, date, time
 from calendar import monthrange
 from abc import ABC, abstractmethod
 from typing import List, Iterator
-from utils import _TIME_UNIT_REGISTRY, register_unit, _all_unit_keys, _is_reachable, is_duplicated_hour, is_duplicated_quarter, is_missing_hour, is_missing_quarter
+from utils import _GRIDTIME_REGISTRY, register_unit, _all_unit_keys, _is_reachable, is_duplicated_hour, is_duplicated_quarter, is_missing_hour, is_missing_quarter
 from collections.abc import Sequence
 
 
-class TimeLeaf(ABC):
+class GridtimeLeaf(ABC):
     def _structure_name(self) -> str:
         return self.__class__.__name__
 
     def unit_key(self) -> str:
-        return _TIME_UNIT_REGISTRY[self.__class__]["unit_key"]
+        return _GRIDTIME_REGISTRY[self.__class__]["unit_key"]
 
     @abstractmethod
     def __repr__(self) -> str:
         pass
 
-    def _iter_children(self) -> Iterator["TimeLeaf"]:
+    def _iter_children(self) -> Iterator["GridtimeLeaf"]:
         return iter(())
 
     def children_key(self) -> str | None:
-        return _TIME_UNIT_REGISTRY[self.__class__].get("children_key")
+        return _GRIDTIME_REGISTRY[self.__class__].get("children_key")
 
     def _validate_unit(self, unit: str) -> None:
         if unit not in _all_unit_keys():
@@ -35,14 +35,14 @@ class TimeLeaf(ABC):
                 f"{self._structure_name()} ('{self.unit_key()}')."
             )
         
-    def __iter__(self) -> Iterator["TimeLeaf"]:
+    def __iter__(self) -> Iterator["GridtimeLeaf"]:
         return self._iter_children()
 
     def __len__(self) -> int:
         return sum(1 for _ in self._iter_children())
 
     def __contains__(self, other: object) -> bool:
-        if not isinstance(other, TimeLeaf):
+        if not isinstance(other, GridtimeLeaf):
             return False
         return any(node == other for node in self.walk(other.unit_key()))
     
@@ -64,18 +64,18 @@ class TimeLeaf(ABC):
             return 0
         return sum(child.count(unit) for child in self._iter_children())
 
-    def get(self, unit: str) -> List["TimeLeaf"]:
+    def get(self, unit: str) -> List["GridtimeLeaf"]:
         self._validate_unit(unit)
         if self.unit_key() == unit:
             return [self]
         if self.children_key() is None:
             return []
-        out: List["TimeLeaf"] = []
+        out: List["GridtimeLeaf"] = []
         for child in self._iter_children():
             out.extend(child.get(unit))
         return out
 
-    def walk(self, unit: str) -> Iterator["TimeLeaf"]:
+    def walk(self, unit: str) -> Iterator["GridtimeLeaf"]:
         self._validate_unit(unit)
         if self.unit_key() == unit:
             yield self
@@ -110,21 +110,21 @@ class TimeLeaf(ABC):
     def print_tree(self, **kwargs): 
         print(self.tree(**kwargs))
 
-class TimeStructure(TimeLeaf):
+class GridtimeStructure(GridtimeLeaf):
     def __init__(self):
-        self._children: Sequence[TimeLeaf] | None = None
+        self._children: Sequence[GridtimeLeaf] | None = None
 
     @abstractmethod
-    def _create_children(self) -> list[TimeLeaf]:
+    def _create_children(self) -> list[GridtimeLeaf]:
         ...
 
-    def _iter_children(self) -> Iterator[TimeLeaf]:
+    def _iter_children(self) -> Iterator[GridtimeLeaf]:
         if self._children is None:
             self._children = self._create_children()
         return iter(self._children)
     
 @register_unit("quarters15")
-class QuarterHour(TimeLeaf):
+class QuarterHour(GridtimeLeaf):
     def __init__(self, start_time: datetime, *, is_backward: bool = False):
         super().__init__()
         self.start_time = start_time
@@ -151,7 +151,7 @@ class QuarterHour(TimeLeaf):
         return base
 
 @register_unit("hours", children_key="quarters15")
-class Hour(TimeStructure):
+class Hour(GridtimeStructure):
     def __init__(self, reference_time: datetime, *, is_backward: bool = False):
         super().__init__()
         self.end_time = reference_time
@@ -172,7 +172,7 @@ class Hour(TimeStructure):
         
         self._children = self._create_children()
         
-    def _create_children(self) -> list[TimeLeaf]:
+    def _create_children(self) -> list[GridtimeLeaf]:
         return create_quarter_hours(self.start_time) # type: ignore
     
     def strftime(self, format: str) -> str:
@@ -186,14 +186,14 @@ class Hour(TimeStructure):
         return base
 
 @register_unit("days", children_key="hours")
-class Day(TimeStructure):
+class Day(GridtimeStructure):
     def __init__(self, day_date: date):
         super().__init__()
         self.date = day_date
         self._children = self._create_children()
         self.hours = self._create_children()
 
-    def _create_children(self) -> list[TimeLeaf]:
+    def _create_children(self) -> list[GridtimeLeaf]:
         return create_hours(self.date) # type: ignore
     
     def strftime(self, format: str) -> str:
@@ -203,21 +203,21 @@ class Day(TimeStructure):
         return f"{self.date.strftime('%Y-%m-%d')}"
         
 @register_unit("months", children_key="days")
-class Month(TimeStructure):
+class Month(GridtimeStructure):
     def __init__(self, year: int, month: int):
         super().__init__()
         self.year = year
         self.month = month
         self._children = self._create_children()
 
-    def _create_children(self) -> list[TimeLeaf]:
+    def _create_children(self) -> list[GridtimeLeaf]:
         return create_days(self.year, self.month) # type: ignore
     
     def __repr__(self):
         return f"{self.year}-{self.month:02}"
 
 @register_unit("quarters", children_key="months")  
-class Quarter(TimeStructure):
+class Quarter(GridtimeStructure):
     def __init__(self, year: int, quarter: int):
         super().__init__()
         if quarter not in (1, 2, 3, 4):
@@ -226,41 +226,41 @@ class Quarter(TimeStructure):
         self.quarter = quarter
         self._children = self._create_children()
 
-    def _create_children(self) -> list[TimeLeaf]:
+    def _create_children(self) -> list[GridtimeLeaf]:
         return create_quarter_months(self.year, self.quarter) # type: ignore
     
     def __repr__(self):
         return f"{self.year}-Q{self.quarter}"
     
 @register_unit("years", children_key="quarters")    
-class Year(TimeStructure):
+class Year(GridtimeStructure):
     def __init__(self, year: int):
         super().__init__()
         self.year = year
         self._children = self._create_children()
 
-    def _create_children(self) -> list[TimeLeaf]:
+    def _create_children(self) -> list[GridtimeLeaf]:
         return create_quarters(self.year, quarters=range(1, 5))  #type: ignore
     
     def __repr__(self):
         return f"{self.year}"    
     
 @register_unit("weeks", children_key="days")    
-class Week(TimeStructure):
+class Week(GridtimeStructure):
     def __init__(self, iso_year: int, iso_week: int):
         super().__init__()
         self.iso_year = iso_year
         self.iso_week = iso_week
         self._children = self._create_children()
 
-    def _create_children(self) -> list[TimeLeaf]:
+    def _create_children(self) -> list[GridtimeLeaf]:
         return create_week_days(self.iso_year, self.iso_week)  #type: ignore
 
     def __repr__(self):
         return f"W-{self.iso_week}-{self.iso_year}"
     
 @register_unit("seasons", children_key="quarters")      
-class Season(TimeStructure):
+class Season(GridtimeStructure):
     def __init__(self, year: int, type_: str):
         super().__init__()
         if type_ not in ("W", "S"):
@@ -270,7 +270,7 @@ class Season(TimeStructure):
         self.type = type_
         self._children = self._create_children()
 
-    def _create_children(self) -> list[TimeLeaf]:
+    def _create_children(self) -> list[GridtimeLeaf]:
         return create_season_quarters(self.year, self.type) #type: ignore
     
     def __repr__(self):

@@ -1,6 +1,6 @@
-# 🕒 TimeUnits – struktury czasu z obsługą DST i drzewiastym API
+# 🕒 Gridtime – struktury czasu z obsługą DST i drzewiastym API
 
-`TimeUnits` to zaawansowany system reprezentacji jednostek czasu w Pythonie – z obsługą zmian czasu (DST), strukturą drzewa (dzień → godziny → kwadranse) i wsparciem dla operacji takich jak iteracja, agregacja, przeszukiwanie.
+`Gridtime` to zaawansowany system reprezentacji jednostek czasu w Pythonie – z obsługą zmian czasu (DST), strukturą drzewa (dzień → godziny → kwadranse) i wsparciem dla operacji takich jak iteracja, agregacja, przeszukiwanie.
 
 ## 🎯 Cel
 
@@ -35,7 +35,7 @@ System rozwiązuje typowe problemy branżowe:
 
 ```python
 from datetime import date, datetime
-from time_units import Day, Hour
+from gridtime import Day, Hour
 
 # Dzień zmiany czasu z letniego na zimowy – 26 października 2025
 dst_day = Day(date(2025, 10, 26))
