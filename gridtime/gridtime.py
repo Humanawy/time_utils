@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, date, time
 from calendar import monthrange
 from abc import ABC, abstractmethod
 from typing import List, Iterator
-from utils import _GRIDTIME_REGISTRY, register_unit, _all_unit_keys, _is_reachable, is_duplicated_hour, is_duplicated_quarter, is_missing_hour, is_missing_quarter
+from gridtime.utils import _GRIDTIME_REGISTRY, register_unit, _all_unit_keys, _is_reachable, is_duplicated_hour, is_duplicated_quarter, is_missing_hour, is_missing_quarter
 from collections.abc import Sequence
 
 

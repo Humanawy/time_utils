@@ -1,5 +1,5 @@
 #__init__.py
-from gridtime import (
+from gridtime.gridtime import (
     QuarterHour,
     Hour,
     Day,
@@ -17,12 +17,8 @@ from gridtime import (
     create_season_quarters,
     create_week_days
     )
-from utils import (
-    is_missing_hour,
-    is_missing_quarter,
-    is_duplicated_hour,
-    is_duplicated_quarter,
-    )
+
+from gridtime.utils import _GRIDTIME_REGISTRY, register_unit, _all_unit_keys, _is_reachable, is_duplicated_hour, is_duplicated_quarter, is_missing_hour, is_missing_quarter
 
 __all__ = [
     "QuarterHour",
@@ -33,10 +29,6 @@ __all__ = [
     "Year",
     "Week",
     "Season",
-    "is_missing_hour",
-    "is_missing_quarter",
-    "is_duplicated_hour",
-    "is_duplicated_quarter",
     "create_hours",
     "create_days",
     "create_months",
@@ -45,4 +37,12 @@ __all__ = [
     "create_quarter_months",
     "create_season_quarters",
     "create_week_days",
+    "register_unit",
+    "_GRIDTIME_REGISTRY",
+    "_all_unit_keys",
+    "_is_reachable",            
+    "is_duplicated_hour",
+    "is_duplicated_quarter",
+    "is_missing_hour",
+    "is_missing_quarter"
 ]

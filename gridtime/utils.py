@@ -15,7 +15,6 @@ def print_structure_tree(cls: type, indent: str = ""):
 
     child_key = _GRIDTIME_REGISTRY.get(cls, {}).get("children_key")
     if child_key:
-        # znajdź klasy dzieci po children_key
         child_classes = [
             child_cls for child_cls, props in _GRIDTIME_REGISTRY.items()
             if props["unit_key"] == child_key

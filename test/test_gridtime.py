@@ -1,11 +1,14 @@
-# test/test_time_units.py
+# test/test_gridtime.py
 import sys
 import os
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import pytest
 from datetime import datetime, timedelta
 import gridtime as gt
+
+from gridtime.utils import is_duplicated_hour, is_duplicated_quarter
 
 def test_valid_quarter():
     dt = datetime(2025, 3, 30, 1, 0)
@@ -20,19 +23,19 @@ def test_missing_quarter():
 
 def test_duplicated_hour_true():
     dt = datetime(2025, 10, 26, 2, 0)
-    assert gt.is_duplicated_hour(dt) is True
+    assert is_duplicated_hour(dt) is True
 
 def test_duplicated_hour_false_day_after():
     dt = datetime(2025, 10, 27, 2, 0)
-    assert gt.is_duplicated_hour(dt) is False
+    assert is_duplicated_hour(dt) is False
 
 def test_duplicated_quarter_true():
     dt = datetime(2025, 10, 26, 2, 30)
-    assert gt.is_duplicated_quarter(dt) is True
+    assert is_duplicated_quarter(dt) is True
 
 def test_duplicated_quarter_false():
     dt = datetime(2025, 10, 26, 3, 0)
-    assert gt.is_duplicated_quarter(dt) is False
+    assert is_duplicated_quarter(dt) is False
 
 def test_days_in_february_leap_year():
     days = gt.create_days(2024, 2)
