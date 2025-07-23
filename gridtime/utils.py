@@ -22,11 +22,12 @@ def print_structure_tree(cls: type, indent: str = ""):
         for child_cls in child_classes:
             print_structure_tree(child_cls, indent + "  ")
 
-def register_unit(unit_key: str, children_key: Optional[str] = None):
+def register_unit(unit_key: str, children_key: Optional[str] = None, step: Optional[str] = None):
     def decorator(cls):
         _GRIDTIME_REGISTRY[cls] = {
             "unit_key": unit_key,
-            "children_key": children_key
+            "children_key": children_key,
+            "step": step,     
         }
         return cls
     return decorator

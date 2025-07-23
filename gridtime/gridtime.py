@@ -6,6 +6,213 @@ from typing import List, Iterator
 from gridtime.utils import _GRIDTIME_REGISTRY, register_unit, _all_unit_keys, _is_reachable, is_duplicated_hour, is_duplicated_quarter, is_missing_hour, is_missing_quarter
 from collections.abc import Sequence
 
+from datetime import timedelta
+
+def quarter_hour_step(obj: "QuarterHour", steps: int) -> "QuarterHour":
+    """
+    Zwraca instancję QuarterHour przesuniętą o `steps` kwadransów.
+
+    • steps > 0  – w przyszłość
+    • steps < 0  – w przeszłość
+
+    Uwzględnia:
+      • duplikaty kwadransów (is_duplicated_quarter / is_backward)
+      • brakujące kwadranse (is_missing_quarter)
+    """
+    if steps == 0:
+        return obj
+
+    direction = 1 if steps > 0 else -1    # +1 → przód, -1 → tył
+    current   = obj
+
+    for _ in range(abs(steps)):
+
+        # ── 1. Druga kopia w duplikacie ────────────────────────────────────
+        if direction > 0 and current.is_duplicated and not current.is_backward:
+            # ↑1st → ↓2nd
+            current = QuarterHour(current.start_time, is_backward=True)
+            continue
+
+        if direction < 0 and current.is_duplicated and current.is_backward:
+            # ↓2nd → ↑1st
+            current = QuarterHour(current.start_time, is_backward=False)
+            continue
+
+        # ── 2. Przejście do kolejnego / poprzedniego kwadransa ─────────────
+        cand_start = current.start_time + timedelta(minutes=15 * direction)
+
+        # pomijamy brakujące kwadranse (wiosenna zmiana czasu)
+        while is_missing_quarter(cand_start):
+            cand_start += timedelta(minutes=15 * direction)
+
+        # ── 3. Tworzymy instancję dla cand_start ───────────────────────────
+        if is_duplicated_quarter(cand_start):
+            # jeżeli duplikat:
+            #   • przy kroku +1 – pierwszy egzemplarz
+            #   • przy kroku -1 – drugi (bliższy wstecz)
+            is_back = direction < 0
+            current = QuarterHour(cand_start, is_backward=is_back)
+        else:
+            current = QuarterHour(cand_start)
+
+    return current
+
+def hour_step(obj: "Hour", steps: int) -> "Hour":
+    """
+    Zwraca instancję Hour przesuniętą o `steps` okresów.
+    *  steps  > 0  – w przyszłość
+    *  steps  < 0  – w przeszłość
+    Obsługa:
+      • duplikatów (is_duplicated / is_backward)
+      • brakujących godzin (is_missing_hour)
+    """
+    if steps == 0:
+        return obj
+
+    direction = 1 if steps > 0 else -1
+    current   = obj
+
+    for _ in range(abs(steps)):
+
+        # ── 1. Druga kopia w duplikacie ──────────────────────────────────────
+        if direction > 0 and current.is_duplicated and not current.is_backward:
+            #   ↑1st  →  ↓2nd
+            current = Hour(current.end_time, is_backward=True)
+            continue
+
+        if direction < 0 and current.is_duplicated and current.is_backward:
+            #   ↓2nd  →  ↑1st
+            current = Hour(current.end_time, is_backward=False)
+            continue
+
+        # ── 2. Przejście do kolejnej / poprzedniej godziny ──────────────────
+        cand_end = current.end_time + timedelta(hours=direction)
+
+        # pomijamy brakującą godzinę (wiosenna zmiana czasu)
+        while True:
+            cand_start = cand_end - timedelta(hours=1)
+            if is_missing_hour(cand_start):
+                cand_end += timedelta(hours=direction)
+                continue
+            break
+
+        # ── 3. Tworzymy instancję dla cand_end ──────────────────────────────
+        if is_duplicated_hour(cand_start):
+            # jeżeli duplikat:
+            #   • przy kroku +1 wybieramy 1-szy egzemplarz
+            #   • przy kroku -1 – 2-gi (bo jest „bliżej” w czasie wstecz)
+            is_back = direction < 0
+            current = Hour(cand_end, is_backward=is_back)
+        else:
+            current = Hour(cand_end)
+
+    return current
+
+def day_step(obj: "Day", steps: int) -> "Day":
+    """
+    Zwraca instancję Day przesuniętą o `steps` dni.
+      • steps > 0  – przyszłość
+      • steps < 0  – przeszłość
+      • steps == 0 – ten sam dzień
+    """
+    if steps == 0:
+        return obj
+    new_date = obj.date + timedelta(days=steps)
+    return Day(new_date)
+
+def month_step(obj: "Month", steps: int) -> "Month":
+    """
+    Zwraca instancję Month przesuniętą o `steps` miesięcy.
+
+      • steps > 0  – przyszłość
+      • steps < 0  – przeszłość
+      • steps == 0 – ten sam miesiąc
+    """
+    if steps == 0:
+        return obj
+
+    # liczba miesięcy od „epochy” (rok 0, styczeń = 0)
+    current_index = obj.year * 12 + (obj.month - 1)
+    target_index  = current_index + steps
+
+    new_year, new_month_zero = divmod(target_index, 12)  # divmod działa poprawnie z liczbami < 0
+    new_month = new_month_zero + 1                       # 0-based → 1-based
+
+    return Month(new_year, new_month)
+
+def quarter_step(obj: "Quarter", steps: int) -> "Quarter":
+    """
+    Przesuń Quarter o `steps` kwartałów (dodatnie ➜ przyszłość, ujemne ➜ przeszłość).
+    """
+    if steps == 0:
+        return obj
+
+    current_idx = obj.year * 4 + (obj.quarter - 1)   # 0-based indeks globalny
+    target_idx  = current_idx + steps
+
+    new_year, new_q_zero = divmod(target_idx, 4)
+    new_quarter = new_q_zero + 1                     # 1–4
+
+    return Quarter(new_year, new_quarter)
+
+def year_step(obj: "Year", steps: int) -> "Year":
+    """
+    Przesuń Year o `steps` lat.
+    """
+    if steps == 0:
+        return obj
+    return Year(obj.year + steps)
+
+def week_step(obj: "Week", steps: int) -> "Week":
+    """
+    Przesuń Week o `steps` tygodni według kalendarza ISO-8601.
+    """
+    if steps == 0:
+        return obj
+
+    # poniedziałek danego tygodnia
+    current_monday = date.fromisocalendar(obj.iso_year, obj.iso_week, 1)
+    target_monday  = current_monday + timedelta(weeks=steps)
+
+    new_iso_year, new_iso_week, _ = target_monday.isocalendar()
+    return Week(new_iso_year, new_iso_week)
+
+def season_step(obj: "Season", steps: int) -> "Season":
+    """
+    Zwraca instancję Season przesuniętą o `steps` sezonów
+    (dodatnie ➜ przyszłość, ujemne ➜ przeszłość).
+    """
+    if steps == 0:
+        return obj
+
+    # 0-based, rosnący wraz z  chronologią
+    current_idx = obj.year * 2 + (0 if obj.type == "S" else 1)
+    target_idx  = current_idx + steps
+
+    new_year, mod = divmod(target_idx, 2)     # mod ∈ {0, 1}
+    new_type = "S" if mod == 0 else "W"
+
+    return Season(new_year, new_type)
+
+def month_decade_step(obj: "MonthDecade", steps: int) -> "MonthDecade":
+    """
+    Przesuń MonthDecade o `steps` dekad (10-dniowych okresów).
+    Kroki +/-1 przechodzą kolejno: 1→2→3→(następny miesiąc, dekada 1) itd.
+    """
+    if steps == 0:
+        return obj
+
+    # globalny indeks: każdy miesiąc ma 3 dekady
+    current_idx = (obj.year * 12 + (obj.month - 1)) * 3 + (obj.index - 1)
+    target_idx  = current_idx + steps
+
+    # dekodujemy z powrotem
+    month_block, new_idx_zero = divmod(target_idx, 3)   # 0..2
+    new_year, new_month_zero  = divmod(month_block, 12)
+    new_month  = new_month_zero + 1
+    new_index  = new_idx_zero + 1                       # 1..3
+
+    return MonthDecade(new_year, new_month, new_index)
 
 class GridtimeLeaf(ABC):
     def _structure_name(self) -> str:
@@ -17,6 +224,16 @@ class GridtimeLeaf(ABC):
     @abstractmethod
     def __repr__(self) -> str:
         pass
+
+    def shift(self, steps: int = 1) -> "GridtimeLeaf":
+        info = _GRIDTIME_REGISTRY[self.__class__]
+        if "step" not in info:
+            raise NotImplementedError(f"Brak klucza 'step' dla {self.__class__.__name__}")
+        return info["step"](self, steps)
+    
+    def next(self): return self.shift(+1)
+    def prev(self): return self.shift(-1)
+    def __next__(self): return self.next()
 
     def _iter_children(self) -> Iterator["GridtimeLeaf"]:
         return iter(())
@@ -123,7 +340,7 @@ class GridtimeStructure(GridtimeLeaf):
             self._children = self._create_children()
         return iter(self._children)
     
-@register_unit("quarters15")
+@register_unit("quarters15", step=quarter_hour_step)
 class QuarterHour(GridtimeLeaf):
     def __init__(self, start_time: datetime, *, is_backward: bool = False):
         super().__init__()
@@ -150,7 +367,7 @@ class QuarterHour(GridtimeLeaf):
             return f"{base} [{tag}]"
         return base
 
-@register_unit("hours", children_key="quarters15")
+@register_unit("hours", children_key="quarters15", step=hour_step)
 class Hour(GridtimeStructure):
     def __init__(self, reference_time: datetime, *, is_backward: bool = False):
         super().__init__()
@@ -185,7 +402,7 @@ class Hour(GridtimeStructure):
             return f"{base} [{tag}]"
         return base
 
-@register_unit("days", children_key="hours")
+@register_unit("days", children_key="hours", step=day_step)
 class Day(GridtimeStructure):
     def __init__(self, day_date: date):
         super().__init__()
@@ -202,7 +419,7 @@ class Day(GridtimeStructure):
     def __repr__(self):
         return f"{self.date.strftime('%Y-%m-%d')}"
         
-@register_unit("months", children_key="days")
+@register_unit("months", children_key="decades10", step=month_step)
 class Month(GridtimeStructure):
     def __init__(self, year: int, month: int):
         super().__init__()
@@ -216,7 +433,7 @@ class Month(GridtimeStructure):
     def __repr__(self):
         return f"{self.year}-{self.month:02}"
 
-@register_unit("quarters", children_key="months")  
+@register_unit("quarters", children_key="months", step=quarter_step)  
 class Quarter(GridtimeStructure):
     def __init__(self, year: int, quarter: int):
         super().__init__()
@@ -232,7 +449,7 @@ class Quarter(GridtimeStructure):
     def __repr__(self):
         return f"{self.year}-Q{self.quarter}"
     
-@register_unit("years", children_key="quarters")    
+@register_unit("years", children_key="quarters", step=year_step)    
 class Year(GridtimeStructure):
     def __init__(self, year: int):
         super().__init__()
@@ -245,7 +462,7 @@ class Year(GridtimeStructure):
     def __repr__(self):
         return f"{self.year}"    
     
-@register_unit("weeks", children_key="days")    
+@register_unit("weeks", children_key="days", step=week_step)    
 class Week(GridtimeStructure):
     def __init__(self, iso_year: int, iso_week: int):
         super().__init__()
@@ -259,7 +476,7 @@ class Week(GridtimeStructure):
     def __repr__(self):
         return f"W-{self.iso_week}-{self.iso_year}"
     
-@register_unit("seasons", children_key="quarters")      
+@register_unit("seasons", children_key="quarters", step=season_step)  
 class Season(GridtimeStructure):
     def __init__(self, year: int, type_: str):
         super().__init__()
@@ -276,6 +493,30 @@ class Season(GridtimeStructure):
     def __repr__(self):
         display_year = f"{self.year}/{self.year + 1}" if self.type == "W" else str(self.year)
         return f"S-{self.type}-{display_year}"
+
+@register_unit("decades10", children_key="days", step=month_decade_step)
+class MonthDecade(GridtimeStructure):
+    """
+    Dekada miesięczna (1-3).  Przykład:
+        MonthDecade(2025, 7, 2)  →  2025-07 Dekada  2 (11-20 lipca)
+    """
+    def __init__(self, year: int, month: int, index: int):
+        super().__init__()
+        if index not in (1, 2, 3):
+            raise ValueError("Dekada miesiąca musi być 1, 2 lub 3")
+        self.year   = year
+        self.month  = month
+        self.index  = index
+        self._children = self._create_children()
+        self.start_date: date = self._children[0].date  # type: ignore
+        self.end_date: date = self._children[-1].date  # type: ignore
+
+    def _create_children(self) -> list[GridtimeLeaf]:
+        return create_decade_days(self.year, self.month, self.index)  # type: ignore
+    
+    def __repr__(self) -> str:
+        return f"{self.year}-{self.month:02} D{self.index} ({self.start_date.day:02}-{self.end_date.day:02})"
+
 
 def create_days(year: int, month: int, day_range=None) -> list[Day]:
     num_days = monthrange(year, month)[1]
@@ -311,7 +552,7 @@ def create_hours(date_: date, hour_range=range(1, 25)) -> list[Hour]:
         dt_end = datetime.combine(date_, time(0)) + timedelta(hours=hour)
         start_time = dt_end - timedelta(hours=1)
 
-        # brakująca (wiosenna) godzina – pomijamy
+        # brakująca (wiosenna) godzina – pomijamy
         if is_missing_hour(start_time):
             continue
 
@@ -345,11 +586,15 @@ def create_quarter_hours(start_time: datetime) -> list[QuarterHour]:
 
     return quarters
 
-if __name__ == "__main__":
-    # Test the structure tree printing
-    nov_3 = Day(date(2025, 11, 3))
-    h23 = Hour(datetime(2025, 11, 3, 22, 0))
+def create_decade_days(year: int, month: int, index: int) -> list["Day"]:
+    """Zwraca listę obiektów Day w danej dekadzie (1-3) danego miesiąca."""
+    if index not in (1, 2, 3):
+        raise ValueError("index dekady musi być 1, 2 lub 3")
 
-    print(nov_3) 
-    print(h23) 
-    print(h23 in nov_3)
+    start_day = 1 + (index - 1) * 10
+    if index < 3:
+        end_day = start_day + 9
+    else:
+        end_day = monthrange(year, month)[1]            # ostatni dzień miesiąca
+
+    return [Day(date(year, month, d)) for d in range(start_day, end_day + 1)]
