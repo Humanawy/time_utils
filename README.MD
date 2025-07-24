@@ -72,3 +72,5 @@ Struktura drzewa:
     ├── 2025-10-26 03:00-04:00
     ...
 ```
+
+![pisane w 100% przez ludzi.](pisane w 100% przez ludzi..png)
