@@ -73,4 +73,3 @@ Struktura drzewa:
     ...
 ```
 
-![pisane w 100% przez ludzi](pisane_100_procent_przez_ludzi.png)
